@@ -10,3 +10,5 @@ services:
       - "19321:19321"
     tty: true
     stdin_open: true
+    volumes:
+      - ./poc-output:/tmp

